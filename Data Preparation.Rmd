@@ -118,6 +118,8 @@ validation <- val.test[inVal,]
 testing <- val.test[-inVal,]
 
 training$Response <- make.names(training$Response, unique=FALSE)
+validation$Response <- make.names(validation$Response, unique=FALSE)
+testing$Response <- make.names(testing$Response, unique = FALSE)
 
 dim(training)
 ```
@@ -142,6 +144,12 @@ response.dist
 mean(response.dist[1:8])
 ```
 
+## Balance Response Distribution
+
+- I don't htink split is the function i want to use as it removes the response; look into arguments to see if one preserves...
+```{r}
+split.training <- split(training, training$Response)
+```
 
 
 # Modeling
@@ -185,8 +193,8 @@ fitRF.imp
 ## RF Predictions
 ```{r}
 set.seed(seed)
-rf.predictions <- predict(fitRF.imp, newdata = validation)
-confusionMatrix(predictions, validation)
+rf.predictions <- predict(fitRF.imp, newdata = validation[,1:])
+confusionMatrix(as.data.frame(rf.predictions), validation$Response)
 ```
 
 
