@@ -152,6 +152,8 @@ library(caret); library(doParallel); library(parallel)
 fitControl <- trainControl(method = "repeatedcv", 
                            number = 10, 
                            repeats = 3,
+                           classProbs = TRUE,
+                           summaryFunction = multiClassSummary,
                            allowParallel = TRUE)
 metric = "ROC"
 
