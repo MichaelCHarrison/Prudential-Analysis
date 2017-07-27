@@ -38,3 +38,153 @@ NAcolPercentages <- NAcolCounts/(dim(train)[1])
 NAcolPercentages
 ```
 
+- I don't know the feasibility of imputing columns with significant amounts of data missing, especially considering my computation limitations
+- Set an arbitrary theshold of 70% NAs present in column to generate a list of columns to remove from the training set
+
+```{r}
+NAthreshold <- NAcolPercentages > .7
+NAthreshold
+```
+
+```{r}
+overNAThreshold <- as.list(names(NAthreshold[NAthreshold == TRUE]))
+overNAThreshold
+```
+
+- Drop the columns that are over the threshold
+- Depending on how things shake down with imputing the other columns, may be able to add back the dropped columns - could save on computing issues
+
+```{r}
+train.drop <- train[, !(names(train) %in% overNAThreshold)]
+```
+
+
+# Impute the data
+
+## Mice imputation
+
+- Mice assumes that data is missing at random (MAR). Ideally the threshold set to remove NA heavy columns will leave data that are missing due to randomness
+
+```{r}
+library(mice); library(doParallel); library(foreach)
+seed <- 10
+cores <- detectCores() - 1
+cluster <- makeCluster(cores)
+clusterSetRNGStream(cluster, seed)
+registerDoParallel(cluster)
+
+start <- Sys.time()
+train.imp <- 
+        foreach(no = 1:cores,
+                .combine = ibind,
+                .export = "train.drop",
+                .packages = "mice") %dopar% 
+        {
+                mice(data = train.drop, m = 3, maxit = 5, method = 'pmm', seed = seed)
+        }
+stopCluster(cluster)
+elapsed.mice <- start - Sys.time()
+elapsed.mice
+```
+
+- Check if mice properly imputed all NAs
+
+```{r}
+for(i in 1:3){
+        print(colnames(complete(train.imp,i))[colSums(is.na(complete(train.imp,i))>0)])
+}
+
+```
+
+
+
+# Split Train into Training, Validation, and Testing
+
+- as the testing data set does not have a response column, going to split the test dataset in order to produce validation and test sets that I can measure against
+- training first randomforest on the 60/20/20 split was taking far too much time; changed split to 50/25/25 to cut the data set down.
+- going to use a combination of undersampling techniques initially to see if i can't shave the set down a bit more to use my time better.
+- before sampling the data set, i'll rerun the original random forest to use as a baseline to compare the sampling techniques.
+
+```{r}
+library(caret)
+set.seed(seed)
+train.imp1 <- complete(train.imp, 1)
+
+inTrain <- createDataPartition(train.imp1$Response, p=.50, list = FALSE)
+training <- train.imp1[inTrain,]
+val.test <- train.imp1[-inTrain,]
+inVal <- createDataPartition(val.test$Response, p = .5, list = FALSE)
+validation <- val.test[inVal,]
+testing <- val.test[-inVal,]
+
+training$Response <- make.names(training$Response, unique=FALSE)
+
+dim(training)
+```
+
+```{r}
+dim(validation)
+```
+
+```{r}
+dim(testing)
+```
+
+
+# Response Distribution
+```{r}
+response.dist <- cbind(freq = table(training$Response), 
+                       percentage = prop.table(table(training$Response)) * 100)
+response.dist
+```
+
+```{r}
+mean(response.dist[1:8])
+```
+
+
+
+# Modeling
+
+## Training Harness and Parallization functions
+```{r}
+library(caret); library(doParallel); library(parallel)
+fitControl <- trainControl(method = "repeatedcv", 
+                           number = 10, 
+                           repeats = 3,
+                           allowParallel = TRUE)
+metric = "ROC"
+
+#Configures parallel processing
+paraOn <- function(){
+        cluster <- makeCluster(detectCores()-1)
+        registerDoParallel(cluster)}
+
+paraOff <- function(){
+        cluster <- makeCluster(detectCores()-1)
+        stopCluster(cluster)
+        registerDoSEQ()}
+```
+
+
+## Baseline Random Forest 
+```{r, eval=TRUE, results="asis"}
+start <- Sys.time()
+paraOn()
+set.seed(seed)
+fitRF.imp <- train(Response~., data = training,
+                     method = "rf", metric = metric,
+                     trControl = fitControl)
+paraOff()
+elapsed.RF <- Sys.time() - start
+fitRF.imp
+```
+
+## RF Predictions
+```{r}
+set.seed(seed)
+rf.predictions <- predict(fitRF.imp, newdata = validation)
+confusionMatrix(predictions, validation)
+```
+
+
