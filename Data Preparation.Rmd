@@ -1,0 +1,40 @@
+---
+title: "Date Preparation"
+author: "Michael Harrison"
+date: "July 26, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Read in Data
+```{r}
+library(data.table)
+train <- read.table("train.csv", sep = ",", header = TRUE)
+dim(train)
+```
+
+# Columns with NA Values
+
+```{r}
+NA.columns <- colnames(train)[colSums(is.na(train))>0]
+NA.columns
+
+```
+
+## Check Number of NAs per column
+
+```{r}
+NAcolCounts <- colSums(is.na(train))[colSums(is.na(train))>0]
+NAcolCounts
+```
+
+## Check percentages of NAs in NA Columns; drop columns above threshold
+
+```{r}
+NAcolPercentages <- NAcolCounts/(dim(train)[1])
+NAcolPercentages
+```
+
