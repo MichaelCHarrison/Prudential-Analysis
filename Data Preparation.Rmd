@@ -149,6 +149,10 @@ mean(response.dist[1:8])
 - I don't htink split is the function i want to use as it removes the response; look into arguments to see if one preserves...
 ```{r}
 split.training <- split(training, training$Response)
+
+combined3_8 <- merge(x = split.training[3],
+                     y = split.training[8],
+                     all = TRUE)
 ```
 
 
@@ -193,7 +197,7 @@ fitRF.imp
 ## RF Predictions
 ```{r}
 set.seed(seed)
-rf.predictions <- predict(fitRF.imp, newdata = validation[,1:])
+rf.predictions <- predict(fitRF.imp, newdata = validation[,1:122])
 confusionMatrix(as.data.frame(rf.predictions), validation$Response)
 ```
 
